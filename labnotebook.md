@@ -34,7 +34,11 @@ Initial setup of the Swift mobile app project. Referred to the [CoreBluetooth](h
 Finished up the proposal review and talked with Professor Oelze about some suggestions for the mobile app. He told me that I should add battery monitoring for both the main module and receiver module as well as sending notifications when the battery is below a certain percentage. I haven't even considered this, but it definitely improves the user experience, as you can tell when you need to charge each battery and can know what your battery is currently at. Also ordered some ESP32S DevKits for testing the data pipeline. 
 
 ### 02-25-2025 - What is BLE?
-Started working on setting up the BLE connection using the ESP32 Dev board. Needed to learn some background context, since this is my first time working with Bluetooth devices. From [RandomNerdTutorials](https://randomnerdtutorials.com/esp32-ble-server-client/), I learned how BLE works as a protocol with ESP32. ![Gatt](GATT.jpeg)The General Attribute Profile (GATT) defines the way the data is organized and exchanged between devices. It creates a hierarchy as shown below, with services and characterstics. For this instance, we will need all the sensor data and such sent via ESP-NOW formed into a service, and the characterstics set to read and notify. Setting up the ESP32 as the BLE server, this will allow the client (iOS app) to read the sensor values and have the server send updates to the client when the value is changed. Could add write features in the future, but I want to focus on getting the data flow working before worrying about having the mobile app write data to the lock. We will need a unique Characteristic and Service UUID, I found this [website](https://guidgenerator.com/) that lets us generate UUIDs in industry format, so I used those to get 
+Started working on setting up the BLE connection using the ESP32 Dev board. Needed to learn some background context, since this is my first time working with Bluetooth devices. From [RandomNerdTutorials](https://randomnerdtutorials.com/esp32-ble-server-client/), I learned how BLE works as a protocol with ESP32. 
+
+![Gatt](GATT.jpeg)
+
+The General Attribute Profile (GATT) defines the way the data is organized and exchanged between devices. It creates a hierarchy as shown below, with services and characterstics. For this instance, we will need all the sensor data and such sent via ESP-NOW formed into a service, and the characterstics set to read and notify. Setting up the ESP32 as the BLE server, this will allow the client (iOS app) to read the sensor values and have the server send updates to the client when the value is changed. Could add write features in the future, but I want to focus on getting the data flow working before worrying about having the mobile app write data to the lock. We will need a unique Characteristic and Service UUID, I found this [website](https://guidgenerator.com/) that lets us generate UUIDs in industry format, so I used those to get 
 ```swift
 let serviceUUID = CBUUID(string: "bb5c667c-f2cd-4c28-8294-9a1dcce77c6d")
 let characteristicUUID = CBUUID(string: "f53c7d59-eca1-45b0-9b4d-b362036fec96")
@@ -97,7 +101,9 @@ text section exceeds available space in board
 Compilation error: text section exceeds available space in board
 ```
 This error was fixed by changing the partition scheme from Default 4MB with spiffs (1.2MB APP/1.5MB SPIFFS) to No OTA (2MB APP/2MB SPIFFS) which freed up some available storage and allowed the upload to finally happen. Then to check if the server was actually running, I had to install the nRFConnect app to scan for BLE devices. 
+
 ![Image](scanner.jpg)
+
 When scanning for BLE devices, "ESP32-BikeTheft" shows up with the correct UUIDs, and it allows us to connect, verifying that the BLE server is running properly. It took a while to compile and get it running, but at least it is working properly. Will begin working on mobile app and helping with the breadboard demo. 
 
 ### 03-18-2025 - Mobile App Integration
@@ -169,14 +175,23 @@ class BLEManager: NSObject, ObservableObject, CBCentralManagerDelegate, CBPeriph
     }
 ```
 I defined a centralManager that handles the scanning and connecting of BLE devices using the Characteristic and Service UUIDs generated for the BLE server. The espPeripheral stores the discovered BLE server peripheral. The sensorCharacteristic stores the specific GATT characteristic used to receive data. I also set up the SwiftUI file to display whether the device is connected to the BLE server using the boolean isConnected, as well as displaying the variable sensorData. sensorData displays `Waiting for data...` when the device is not connected, and updates to the sensorData of the BLE server once it does. I had no sensor data yet since ESP-NOW is not set up, so I sent fake data in the form of a string called "Hello from ESP32". Tried using the XCode iPhone simulation, but simulations cannot connect to BLE so I had to upload the code to my phone directly. However, when compiling, the app crashed. 
+
 ![Image](app_crash.png)
+
 After looking into it, especially this [stackoverflow post](https://stackoverflow.com/questions/67896404/where-is-info-plist-in-xcode-13-missing-not-inside-project-navigator), this occurs because we don't have the correct properties allowed for the application and we need to enable Bluetooth. Fixed this by going into the Info.plist file and adding a NSBluetoothAlwaysUsageDescription. Attached are now the two images of the device working properly. 
-![Image](esp32_ble.png) ![Image](bletest_2.png)
+
+![Image](esp32_ble.png)
+
+![Image](bletest_2.png)
+
 It now asks for Bluetooth permissions as shown on the left, and connects properly to the BLE device and displays the fake data we sent. I checked this further by looking at the serial monitor and checking the print statements, printing `Bluetooth is powered on` and the sensor characteristics and checked if they lined up correctly. From the UI it is clear that the BLE server is working properly with the app and half of the data pipeline is complete! Let's go. This was the main goal to finish over spring break so I will probably spend the rest of the time enjoying my break and begin working on ESP-NOW once I'm back on campus, as I forgot the second ESP32 on my desk. 
 
 ### 03-27-2025 ESP-NOW progress
 Today, the goal is to establish an ESP-NOW connection between two ESP32s and test that the correct data is being sent. Like with the BLE server, I began looking at [RandomNerdTutorials](https://randomnerdtutorials.com/esp-now-esp32-arduino-ide/). The goal is to establish a one-way connection as shown below: 
-![Image](ESP-NOW.jpeg) From what I've gathered, there are three main steps to setting up ESP-NOW which are 
+
+![Image](ESP-NOW.jpeg) 
+
+From what I've gathered, there are three main steps to setting up ESP-NOW which are 
 1) Initialize ESP-NOW on the dev boards
 2) Register callback functions which are executed when we send data on the sender ESP32, and when we receive data on the receiver ESP32
 3) Learn the receiver MAC address of the receiver ESP32. 
@@ -303,9 +318,12 @@ void handleSensorData(const esp_now_recv_info_t *info, const uint8_t *incomingDa
 This adds a struct for the incoming data, which we will have to change later for real sensor data. It adds initialization of ESP-NOW in the setup code as well as adding a callback function `handleSensorData()` that manages received data. Honestly, this went a lot smoother than I expected. The ESP-NOW initialization went according to plan and when verifying using the serial monitor we were able to see `testing`, which is exactly what we were expecting. This means that ESP-NOW is working properly between two ESP-32 devices. 
 
 ### 03-28-2025 ESP-NOW to BLE to App
-Quick update, sent in several packets labled `testing` from the sender ESP32 to the receiver BLE server, which should update the characteristics accordingly and display in the mobile application. 
+Quick update, sent in several packets labled `testing` from the sender ESP32 to the receiver BLE server, which should update the characteristics accordingly and display in the mobile application.
+
 ![Image](testing.png)
+
 The data pipeline is now working as expected and will just need to be integrated into the main PCB and receiver module using real sensor data. Also I made this block diagram for the IPR to make the data pipeline more clear. 
+
 ![Image](diagram.png)
 
 ### 03-31-2025 Latency Test
@@ -658,7 +676,9 @@ func peripheral(_ peripheral: CBPeripheral, didUpdateValueFor characteristic: CB
     }
 ```
 The ESP32s send data via a defined struct in Arduino, but the issue is that we won't be able to read that struct in Swift, as it is not supported, as far as I know. A workaround that I found was by changing nothing in the Main PCB, but updating the BLE characteristics as a string, so that we can simply parse the string in Swift, and update flags accordingly. This mimics a struct without having functionality for structs. The UI looks as follows: 
+
 ![Image](IMG_0383.PNG)
+
 and should work accordingly. This provides a clean user interface for all the sensors to work and shows the battery percentage, which is exactly what we wanted from our mobile application. I will be meeting with my group later this week to debug and test before the mock and see if everything works with real data. 
 
 ### 04-22-2025 Full system test
@@ -755,7 +775,9 @@ where $\alpha$ is the smoothing factor. Doing some testing, we found that the av
 
 ### 05-01-2025 - Range testing 
 Today, the goal was to do some functional verification for the Bike Alert system. I wanted to conduct some range tests for the ESP-NOW protocol to check if our system can handle range of up to 200 meters, as we wanted for our final product. This was done by using the Received Signal Strength Indicator (RSSI), which we send via ESP-NOW. 
+
 ![Image](rssi_explained.png)
+
 This diagram explains some decibel ranges of the RSSI and what it indicates in terms of strength. The range tests were conducted using two ESP32 dev boards, one sending constant packets of data using ESP-NOW, we changed nothing about the device, as ESP-NOW automatically sends the RSSI with the data payload. The sender code is below: 
 ```cpp
 #include <esp_now.h>
@@ -824,7 +846,9 @@ void loop() {
 }
 ```
 We conducted range tests at distances of 5m, 50m, 100m and 200m outside, where I would collect around 100-200 packets of ESP-NOW at each distance. The distances were measured using Google Maps, and an example of the serial monitor is shown here: 
+
 ![Image](seq.png)
+
 I then parsed the RSSI and wrote a python script to create a box plot of RSSI vs distances. 
 ```python
 import matplotlib.pyplot as plt
@@ -870,6 +894,9 @@ plt.tight_layout()
 plt.show()
 ```
 An example of the box plot is attached. 
+
 ![Image](rssiplot.png)
+
 We notice that over close distances, we are receiving averages of around -25 dBm indicating a very strong signal. As we get further and further, the dBm increases as expected, with some weak signal strength and packet loss at around 200m. This is what we wanted from our original design. If we need more range, we could extend it by converting our ESP32s to long range mode, which is a feature from Espressif, or by adding a stronger antenna to the outside of our microcontrollers. Also I updated the app icon on the mobile device. This was done by generating an icon using ChatGPT and [appicon](https://www.appicon.co/) to create the icon at every dimension needed for iOS. Then I zipped the file of images and attached it in SwiftUI. Icon is found below: 
+
 ![Image](bikealertappicon.png)
